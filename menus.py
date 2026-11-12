@@ -114,8 +114,16 @@ def agendar(dados: dict) -> None:
     if id_escolhido == 0:
         print("Operação cancelada.")
         return
+    horario = regras.buscar_horario(dados, id_escolhido)
     nome = val.ler_texto("Nome do paciente")
     cns = val.ler_cns()
+    dia = regras.momento_do_horario(horario).date()
+    existente = regras.consulta_ativa_no_dia(dados, cns, dia)
+    if existente is not None:
+        data, hora = data_e_hora(regras.buscar_horario(dados, existente["id_horario"]))
+        print(f"\nEste paciente já tem consulta marcada em {data} às {hora} "
+              f"({existente['nm_paciente']}). Não é permitido duplicar no mesmo dia.")
+        return
     print("\nRisco de FALTA (calculado pelo sistema):")
     print("  1 ponto por falta anterior + 1 ponto se for a primeira consulta na UBS.")
     print("  2 pontos ou mais = risco ALTO; menos que isso = risco BAIXO.")
@@ -183,6 +191,8 @@ def registrar_confirmacao(dados: dict) -> None:
     if regras.confirmar_consulta(dados, id_consulta):
         bd.salvar_json(dados)
         print("Confirmação registrada.")
+    else:
+        print("Não foi possível confirmar: o horário já passou ou a consulta não está pendente.")
 
 
 def liberar_nao_confirmadas(dados: dict) -> None:
@@ -260,16 +270,15 @@ def registrar_comparecimento(dados: dict, opcao: str) -> None:
 
 # ---------- 4. Lista do dia ----------
 def menu_lista(dados: dict) -> None:
-    """Submenu da lista do dia: incluir, ver, ofertar vaga e fechar o dia."""
+    """Submenu da lista do dia: incluir, ver e ofertar vaga."""
     while True:
         ifc.limpar_tela()
         ifc.titulo("LISTA DO DIA")
         print("1. Incluir cidadão (VERDE ou AZUL)")
         print("2. Ver lista na ordem de prioridade")
         print("3. Ofertar vaga liberada ao primeiro da lista")
-        print("4. Fechar o dia")
         print("0. Voltar")
-        opcao = val.ler_opcao(("1", "2", "3", "4", "0"))
+        opcao = val.ler_opcao(("1", "2", "3", "0"))
         match opcao:
             case "1":
                 incluir_cidadao(dados)
@@ -277,8 +286,6 @@ def menu_lista(dados: dict) -> None:
                 ver_lista(dados)
             case "3":
                 ofertar_vaga(dados)
-            case "4":
-                encerrar_dia(dados)
             case "0":
                 break
         ifc.pausar()
@@ -290,6 +297,13 @@ def incluir_cidadao(dados: dict) -> None:
     cns = val.ler_cns()
     if cns in regras.cartoes_cadastrados(dados["lista_dia"]):
         print("Este cartão SUS já está na lista do dia.")
+        return
+    hoje = regras.agora(dados).date()
+    existente = regras.consulta_ativa_no_dia(dados, cns, hoje)
+    if existente is not None:
+        data, hora = data_e_hora(regras.buscar_horario(dados, existente["id_horario"]))
+        print(f"Quem tem consulta marcada hoje não entra na fila do dia "
+              f"({existente['nm_paciente']}: {data} às {hora}).")
         return
     cor = ""
     while cor not in bd.CORES:
@@ -360,27 +374,42 @@ def ofertar_vaga(dados: dict) -> None:
 
 
 def encerrar_dia(dados: dict) -> None:
-    """Fecha o dia e guarda os não encaixados (com prioridade) no dados.json."""
-    if not val.ler_sn("Fechar o dia? Quem não foi encaixado terá prioridade amanhã"):
+    """Encerra a agenda do dia: fecha a lista e gera o relatório do dia em JSON.
+
+    Quem não foi encaixado fica com prioridade para o dia seguinte (lista_proximo_dia.json)
+    e o relatório completo vai para relatorio_AAAA-MM-DD.json.
+    """
+    if dados["config"].get("dia_fechado", False):
+        print("A agenda do dia já foi encerrada.")
+        return
+    print("Ao encerrar: quem não foi encaixado terá prioridade amanhã e será gerado")
+    print("o relatório do dia em JSON.\n")
+    if not val.ler_sn("Encerrar a agenda do dia?"):
         print("Operação cancelada.")
         return
     para_amanha = regras.fechar_dia(dados)
+    bd.salvar_proximo_dia(para_amanha)
+    momento = regras.agora(dados)
+    relatorio = relatorios.montar_relatorio_dia(
+        dados, momento.strftime("%Y-%m-%d"), momento.strftime("%Y-%m-%d %H:%M"))
+    arquivo = bd.salvar_relatorio_dia(relatorio)
     bd.salvar_json(dados)
-    print(f"\nDia fechado. {len(para_amanha)} pessoa(s) com prioridade para amanhã.")
-    print("Eles entram na lista com prioridade no próximo dia.")
+    print(f"\nAgenda encerrada. {len(para_amanha)} pessoa(s) com prioridade para amanhã.")
+    print(f"Relatório gerado em {arquivo}.")
 
 
 # ---------- 5. Relatórios ----------
 def menu_relatorios(dados: dict) -> None:
-    """Submenu de relatórios: os 3 indicadores."""
+    """Submenu de relatórios: os 3 indicadores e o encerramento da agenda do dia."""
     while True:
         ifc.limpar_tela()
         ifc.titulo("RELATÓRIOS")
         print("1. Taxa de absenteísmo")
         print("2. Taxa de reaproveitamento de horários")
         print("3. Pessoas não encaixadas no dia")
+        print("4. Encerrar a agenda do dia (gera relatório em JSON)")
         print("0. Voltar")
-        opcao = val.ler_opcao(("1", "2", "3", "0"))
+        opcao = val.ler_opcao(("1", "2", "3", "4", "0"))
         match opcao:
             case "1":
                 mostrar_absenteismo(dados)
@@ -388,6 +417,8 @@ def menu_relatorios(dados: dict) -> None:
                 mostrar_reaproveitamento(dados)
             case "3":
                 mostrar_nao_encaixados(dados)
+            case "4":
+                encerrar_dia(dados)
             case "0":
                 break
         ifc.pausar()

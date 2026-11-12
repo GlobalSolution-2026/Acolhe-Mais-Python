@@ -1,13 +1,18 @@
 """Leitura e gravação dos arquivos JSON + constantes fixas do sistema.
 
-Arquivo único (sempre na mesma pasta dos .py, não importa de onde o programa roda):
-- dados.json: configuração, horários, consultas, lista do dia e a lista de
-  pessoas não encaixadas que entram com prioridade no dia seguinte.
+Arquivos (sempre na mesma pasta dos .py, não importa de onde o programa roda):
+- dados.json: configuração, horários, consultas e lista do dia (estado atual).
+- lista_proximo_dia.json: pessoas não encaixadas que entram com prioridade
+  na lista do dia seguinte.
+
+Ao encerrar a agenda do dia também é gerado um relatório em JSON
+(relatorio_AAAA-MM-DD.json), na mesma pasta.
 """
 import json
 import os
 
 ARQUIVO = "dados.json"
+ARQUIVO_PROXIMO_DIA = "lista_proximo_dia.json"
 
 # Tuplas: valores fixos (nunca mudam durante a execução)
 CORES = ("VERDE", "AZUL")
@@ -32,7 +37,6 @@ def dados_vazios() -> dict:
         "horarios": [],
         "consultas": [],
         "lista_dia": [],
-        "lista_proximo_dia": [],
     }
 
 
@@ -62,3 +66,23 @@ def carregar_json() -> dict:
 def salvar_json(dados: dict) -> None:
     """Grava o dados.json. Chamado após cada operação que altera algo."""
     gravar_arquivo(ARQUIVO, dados)
+
+
+def carregar_proximo_dia() -> list:
+    """Lê a lista de pessoas que ficaram com prioridade para hoje."""
+    return ler_arquivo(ARQUIVO_PROXIMO_DIA, [])
+
+
+def salvar_proximo_dia(pessoas: list) -> None:
+    """Grava as pessoas não encaixadas, que entram com prioridade no próximo dia."""
+    gravar_arquivo(ARQUIVO_PROXIMO_DIA, pessoas)
+
+
+def salvar_relatorio_dia(relatorio: dict) -> str:
+    """Grava o relatório de encerramento em relatorio_AAAA-MM-DD.json.
+
+    Devolve o nome do arquivo criado (usa a data que está dentro do relatório).
+    """
+    nome_arquivo = f"relatorio_{relatorio['data']}.json"
+    gravar_arquivo(nome_arquivo, relatorio)
+    return nome_arquivo

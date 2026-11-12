@@ -3,7 +3,7 @@ from datetime import datetime
 
 FORMATO_DIGITADO = "%d/%m/%Y %H:%M"
 
-"""cns = cartao nacional de saude"""
+#cns = cartao nacional de saúde
 def validar_cns(texto: str) -> bool:
     """Cartão SUS válido = exatamente 15 dígitos (ignora espaços nas pontas)."""
     texto = texto.strip()

@@ -9,7 +9,10 @@ import validacoes as val
 def main() -> None:
     """Carrega os dados, prepara o dia e repete o menu principal até o usuário sair."""
     dados = bd.carregar_json()
-    entraram = regras.iniciar_novo_dia(dados)
+    pessoas_proximo_dia = bd.carregar_proximo_dia()
+    entraram = regras.iniciar_novo_dia(dados, pessoas_proximo_dia)
+    if len(pessoas_proximo_dia) > 0:
+        bd.salvar_proximo_dia([])
     bd.salvar_json(dados)
     if entraram > 0:
         print(f"{entraram} pessoa(s) do dia anterior entraram na lista com prioridade.")

@@ -4,7 +4,7 @@
     "prazo_oferta_min": 30,
     "antecedencia_min": 60,
     "agora_simulado": "",
-    "dia_fechado": true
+    "dia_fechado": false
   },
   "horarios": [
     {
@@ -25,12 +25,12 @@
     {
       "id_horario": 4,
       "dt_horario": "2026-11-09 16:00",
-      "ds_status": "AGENDADO"
+      "ds_status": "REAPROVEITADO"
     },
     {
       "id_horario": 5,
       "dt_horario": "2026-11-09 16:30",
-      "ds_status": "LIVRE"
+      "ds_status": "AGENDADO"
     },
     {
       "id_horario": 6,
@@ -40,7 +40,7 @@
     {
       "id_horario": 7,
       "dt_horario": "2026-11-10 09:00",
-      "ds_status": "REAPROVEITADO"
+      "ds_status": "AGENDADO"
     },
     {
       "id_horario": 8,
@@ -55,7 +55,7 @@
     {
       "id_horario": 10,
       "dt_horario": "2026-11-13 09:00",
-      "ds_status": "AGENDADO"
+      "ds_status": "LIBERADO"
     },
     {
       "id_horario": 11,
@@ -73,7 +73,7 @@
       "fl_primeira_vez": false,
       "ds_risco": "ALTO",
       "tem_contato": true,
-      "ds_status": "REALIZADA",
+      "ds_status": "AGENDADA",
       "fl_confirmacao_dispensada": false
     },
     {
@@ -85,7 +85,7 @@
       "fl_primeira_vez": true,
       "ds_risco": "BAIXO",
       "tem_contato": true,
-      "ds_status": "LIBERADA",
+      "ds_status": "AGENDADA",
       "fl_confirmacao_dispensada": false
     },
     {
@@ -97,7 +97,7 @@
       "fl_primeira_vez": true,
       "ds_risco": "ALTO",
       "tem_contato": true,
-      "ds_status": "FALTA",
+      "ds_status": "CONFIRMADA",
       "fl_confirmacao_dispensada": false
     },
     {
@@ -169,17 +169,17 @@
       "fl_primeira_vez": false,
       "ds_risco": "BAIXO",
       "tem_contato": true,
-      "ds_status": "AGENDADA",
+      "ds_status": "LIBERADA",
       "fl_confirmacao_dispensada": false
     },
     {
       "id_consulta": 10,
-      "id_horario": 4,
-      "nm_paciente": "Caua",
-      "nr_cns": "123456789101234",
-      "nr_faltas_anteriores": 0,
+      "id_horario": 5,
+      "nm_paciente": "Diego",
+      "nr_cns": "123456789012345",
+      "nr_faltas_anteriores": 1,
       "fl_primeira_vez": true,
-      "ds_risco": "BAIXO",
+      "ds_risco": "ALTO",
       "tem_contato": true,
       "ds_status": "CONFIRMADA",
       "fl_confirmacao_dispensada": true
@@ -191,7 +191,7 @@
       "nr_cns": "800000000000001",
       "ds_cor": "AZUL",
       "hr_chegada": "07:40",
-      "ds_status": "NAO_ENCAIXADO",
+      "ds_status": "AGUARDANDO",
       "fl_prioridade_amanha": true
     },
     {
@@ -199,7 +199,7 @@
       "nr_cns": "800000000000002",
       "ds_cor": "VERDE",
       "hr_chegada": "07:50",
-      "ds_status": "NAO_ENCAIXADO",
+      "ds_status": "AGUARDANDO",
       "fl_prioridade_amanha": true
     },
     {
@@ -207,7 +207,7 @@
       "nr_cns": "800000000000004",
       "ds_cor": "AZUL",
       "hr_chegada": "08:10",
-      "ds_status": "NAO_ENCAIXADO",
+      "ds_status": "AGUARDANDO",
       "fl_prioridade_amanha": true
     },
     {
@@ -215,48 +215,6 @@
       "nr_cns": "800000000000003",
       "ds_cor": "VERDE",
       "hr_chegada": "17:10",
-      "ds_status": "ENCAIXADO",
-      "fl_prioridade_amanha": false
-    },
-    {
-      "nm_cidadao": "Alex",
-      "nr_cns": "123456789101234",
-      "ds_cor": "VERDE",
-      "hr_chegada": "11:13",
-      "ds_status": "NAO_ENCAIXADO",
-      "fl_prioridade_amanha": true
-    }
-  ],
-  "lista_proximo_dia": [
-    {
-      "nm_cidadao": "Pedro Alves",
-      "nr_cns": "800000000000001",
-      "ds_cor": "AZUL",
-      "hr_chegada": "07:40",
-      "ds_status": "AGUARDANDO",
-      "fl_prioridade_amanha": true
-    },
-    {
-      "nm_cidadao": "Ana Lima",
-      "nr_cns": "800000000000002",
-      "ds_cor": "VERDE",
-      "hr_chegada": "07:50",
-      "ds_status": "AGUARDANDO",
-      "fl_prioridade_amanha": true
-    },
-    {
-      "nm_cidadao": "Rui Costa",
-      "nr_cns": "800000000000004",
-      "ds_cor": "AZUL",
-      "hr_chegada": "08:10",
-      "ds_status": "AGUARDANDO",
-      "fl_prioridade_amanha": true
-    },
-    {
-      "nm_cidadao": "Alex",
-      "nr_cns": "123456789101234",
-      "ds_cor": "VERDE",
-      "hr_chegada": "11:13",
       "ds_status": "AGUARDANDO",
       "fl_prioridade_amanha": true
     }

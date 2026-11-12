@@ -62,6 +62,29 @@ def consulta_ativa_do_horario(dados: dict, id_horario: int) -> dict:
     return None
 
 
+def consulta_ja_passou(dados: dict, consulta: dict) -> bool:
+    """True se o horário da consulta já passou (ou é agora) pelo relógio do sistema."""
+    horario = buscar_horario(dados, consulta["id_horario"])
+    return horas_ate_consulta(dados, horario) <= 0
+
+
+def consulta_ativa_no_dia(dados: dict, cns: str, dia) -> dict:
+    """Consulta AGENDADA ou CONFIRMADA desse cartão SUS no dia informado (date).
+
+    Devolve a consulta ou None. Serve para barrar agendamento duplicado no mesmo dia
+    e para impedir que quem já tem consulta marcada hoje entre na fila do dia.
+    """
+    for consulta in dados["consultas"]:
+        if consulta["nr_cns"] != cns:
+            continue
+        if consulta["ds_status"] != "AGENDADA" and consulta["ds_status"] != "CONFIRMADA":
+            continue
+        horario = buscar_horario(dados, consulta["id_horario"])
+        if momento_do_horario(horario).date() == dia:
+            return consulta
+    return None
+
+
 def proximo_id(lista: list, campo: str) -> int:
     """Próximo id disponível: maior valor de 'campo' na lista + 1."""
     maior = 0
@@ -147,21 +170,32 @@ def exige_confirmacao(consulta: dict) -> bool:
 
 
 def consultas_pendentes(dados: dict) -> list:
-    """Consultas pendentes de confirmação, risco ALTO primeiro e depois BAIXO."""
+    """Consultas pendentes de confirmação, risco ALTO primeiro e depois BAIXO.
+
+    Só entram consultas que ainda não passaram: confirmar um horário que já
+    passou não faz sentido (nesse caso o próximo passo é registrar presença/falta).
+    """
     pendentes = []
     for consulta in dados["consultas"]:
-        if exige_confirmacao(consulta) and consulta["ds_risco"] == "ALTO":
+        if (exige_confirmacao(consulta) and consulta["ds_risco"] == "ALTO"
+                and not consulta_ja_passou(dados, consulta)):
             pendentes.append(consulta)
     for consulta in dados["consultas"]:
-        if exige_confirmacao(consulta) and consulta["ds_risco"] == "BAIXO":
+        if (exige_confirmacao(consulta) and consulta["ds_risco"] == "BAIXO"
+                and not consulta_ja_passou(dados, consulta)):
             pendentes.append(consulta)
     return pendentes
 
 
 def confirmar_consulta(dados: dict, id_consulta: int) -> bool:
-    """Marca a consulta como CONFIRMADA. Devolve False se ela não aceita confirmação."""
+    """Marca a consulta como CONFIRMADA.
+
+    Devolve False se ela não aceita confirmação (não está pendente ou o horário já passou).
+    """
     consulta = buscar_consulta(dados, id_consulta)
     if consulta is None or not exige_confirmacao(consulta):
+        return False
+    if consulta_ja_passou(dados, consulta):
         return False
     consulta["ds_status"] = "CONFIRMADA"
     return True
@@ -203,10 +237,15 @@ def liberar_consulta(dados: dict, consulta: dict) -> None:
 
 # ---------- comparecimento ----------
 def consultas_do_comparecimento(dados: dict) -> list:
-    """Consultas que ainda aguardam registro de presença ou falta."""
+    """Consultas que aguardam registro de presença ou falta.
+
+    Só entram as que já chegaram no horário (ou passaram): não dá para registrar
+    presença ou falta de uma consulta que ainda não aconteceu.
+    """
     lista = []
     for consulta in dados["consultas"]:
-        if consulta["ds_status"] == "AGENDADA" or consulta["ds_status"] == "CONFIRMADA":
+        aguardando = consulta["ds_status"] == "AGENDADA" or consulta["ds_status"] == "CONFIRMADA"
+        if aguardando and consulta_ja_passou(dados, consulta):
             lista.append(consulta)
     return lista
 
@@ -284,7 +323,7 @@ def fechar_dia(dados: dict) -> list:
     """Fecha o dia: quem não foi encaixado vira NAO_ENCAIXADO com prioridade.
 
     Devolve a lista de cópias dessas pessoas (já prontas para o dia seguinte).
-    A lista também é guardada em dados["lista_proximo_dia"] (salva no dados.json).
+    O chamador grava essa lista em lista_proximo_dia.json.
     """
     para_amanha = []
     for pessoa in dados["lista_dia"]:
@@ -295,16 +334,15 @@ def fechar_dia(dados: dict) -> list:
             copia["ds_status"] = "AGUARDANDO"
             para_amanha.append(copia)
     dados["config"]["dia_fechado"] = True
-    dados["lista_proximo_dia"] = para_amanha
     return para_amanha
 
 
-def iniciar_novo_dia(dados: dict) -> int:
+def iniciar_novo_dia(dados: dict, pessoas_proximo_dia: list) -> int:
     """Prepara a lista do dia ao abrir o sistema.
 
     - Se o dia anterior foi fechado, a lista começa vazia.
-    - Pessoas guardadas em dados["lista_proximo_dia"] entram na lista
-      (sem duplicar o cartão SUS) e a lista do próximo dia é esvaziada.
+    - Pessoas vindas de lista_proximo_dia.json entram na lista
+      (sem duplicar o cartão SUS).
     Devolve quantas pessoas entraram com prioridade.
     """
     if dados["config"].get("dia_fechado", False):
@@ -312,10 +350,9 @@ def iniciar_novo_dia(dados: dict) -> int:
         dados["config"]["dia_fechado"] = False
     cartoes = cartoes_cadastrados(dados["lista_dia"])
     entraram = 0
-    for pessoa in dados.get("lista_proximo_dia", []):
+    for pessoa in pessoas_proximo_dia:
         if pessoa["nr_cns"] not in cartoes:
             dados["lista_dia"].append(pessoa)
             cartoes.add(pessoa["nr_cns"])
             entraram += 1
-    dados["lista_proximo_dia"] = []
     return entraram
