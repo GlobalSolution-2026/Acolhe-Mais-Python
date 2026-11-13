@@ -55,6 +55,13 @@ def listar_nao_encaixados(lista_dia: list) -> list:
             resultado.append(pessoa)
     return resultado
 
+def listar_aguardando(lista_dia: list) -> list:
+    """Pessoas da lista do dia que ainda estão AGUARDANDO vaga (dia não encerrado)."""
+    resultado = []
+    for pessoa in lista_dia:
+        if pessoa["ds_status"] == "AGUARDANDO":
+            resultado.append(pessoa)
+    return resultado
 
 def montar_relatorio_dia(dados: dict, data_texto: str, gerado_em: str) -> dict:
     """Monta o relatório de encerramento do dia (dicionário pronto para virar JSON).

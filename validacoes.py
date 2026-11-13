@@ -1,4 +1,16 @@
-"""Validações e leitura segura de entradas do usuário."""
+"""Validações e leitura segura das entradas do usuário.
+
+Tem dois tipos de função:
+- validar_...: só conferem o texto e devolvem True ou False
+  (cartão SUS com 15 dígitos, data/hora DD/MM/AAAA HH:MM, opção de menu).
+- ler_...: fazem a pergunta e repetem até o usuário digitar algo válido
+  (opção de menu, S/N, texto não vazio, cartão SUS, inteiro num intervalo
+  e data/hora, que aceita ENTER vazio para voltar ao relógio real).
+
+Assim o resto do programa já recebe os dados corretos e não quebra
+com entradas erradas.
+"""
+
 from datetime import datetime
 
 FORMATO_DIGITADO = "%d/%m/%Y %H:%M"

@@ -1,7 +1,26 @@
-"""Regras de negócio: agenda, confirmação, liberação e lista do dia."""
-from datetime import datetime
+"""Regras de negócio do sistema: agenda, confirmação, liberação e lista do dia.
 
-from dados import PRAZO_CONFIRMACAO, LIMITE_DISPENSA_H, FORMATO_DATA_HORA, CORES
+Principais regras:
+- Risco de falta: 1 ponto por falta anterior + 1 se for a primeira consulta
+  na UBS. Com 2 pontos ou mais o risco é ALTO; senão, BAIXO.
+- Confirmação: risco ALTO precisa confirmar 72h antes e risco BAIXO, 48h antes.
+  Consulta marcada com menos de 24h de antecedência dispensa confirmação.
+- Liberação: consulta não confirmada no prazo tem a vaga liberada, mas
+  paciente sem contato fica protegido (não perde a vaga).
+- Lista do dia: ordem de prioridade = quem veio do dia anterior primeiro,
+  depois VERDE antes de AZUL, sempre por ordem de chegada.
+- Encerramento: quem não foi encaixado ganha prioridade no dia seguinte.
+
+O relógio do sistema pode ser simulado (agora_simulado no config) para
+demonstrar as regras de prazo sempre do mesmo jeito.
+Aqui não tem input nem print: só regras que alteram e consultam os dados.
+"""
+
+from datetime import datetime, timedelta
+
+from dados import (PRAZO_CONFIRMACAO, LIMITE_DISPENSA_H, FORMATO_DATA_HORA, CORES,
+                   HORAS_ATENDIMENTO, DIAS_AGENDA, TOLERANCIA_ENCAIXE_MIN,
+                   PREENCHER_EXEMPLO, NOMES_EXEMPLO, SOBRENOMES_EXEMPLO)
 
 
 # ---------- relógio do sistema ----------
@@ -55,9 +74,10 @@ def buscar_consulta(dados: dict, id_consulta: int) -> dict:
 
 
 def consulta_ativa_do_horario(dados: dict, id_horario: int) -> dict:
-    """Consulta que está ocupando o horário (ignora as já LIBERADAS). None se não há."""
+    """Consulta que está ocupando o horário (ignora LIBERADA e FALTA). None se não há."""
     for consulta in dados["consultas"]:
-        if consulta["id_horario"] == id_horario and consulta["ds_status"] != "LIBERADA":
+        if (consulta["id_horario"] == id_horario and consulta["ds_status"] != "LIBERADA"
+                and consulta["ds_status"] != "FALTA"):
             return consulta
     return None
 
@@ -93,6 +113,25 @@ def proximo_id(lista: list, campo: str) -> int:
             maior = item[campo]
     return maior + 1
 
+def nome_do_cartao(dados: dict, cns: str) -> str:
+    """Nome já cadastrado com esse cartão SUS (nas consultas ou na lista do dia).
+
+    Devolve "" se o cartão ainda não foi usado. Serve para impedir que o mesmo
+    cartão SUS seja usado por pessoas diferentes.
+    """
+    for consulta in dados["consultas"]:
+        if consulta["nr_cns"] == cns:
+            return consulta["nm_paciente"]
+    for pessoa in dados["lista_dia"]:
+        if pessoa["nr_cns"] == cns:
+            return pessoa["nm_cidadao"]
+    return ""
+
+
+def cartao_de_outra_pessoa(dados: dict, cns: str, nome: str) -> bool:
+    """True se o cartão SUS já pertence a alguém com outro nome."""
+    cadastrado = nome_do_cartao(dados, cns)
+    return cadastrado != "" and cadastrado.lower() != nome.strip().lower()
 
 def cartoes_cadastrados(lista_dia: list) -> set:
     """Set de cartões SUS já na lista do dia (barra duplicidade)."""
@@ -118,11 +157,79 @@ def calcular_risco(faltas_anteriores: int, primeira_vez: bool) -> str:
 
 
 # ---------- agenda ----------
+def inserir_em_ordem(horarios: list, novo: dict) -> None:
+    """Insere o horário na posição certa para a lista continuar em ordem de data/hora.
+
+    O texto 'AAAA-MM-DD HH:MM' pode ser comparado direto com > (a ordem do texto
+    é a mesma ordem do tempo).
+    """
+    posicao = len(horarios)
+    for indice in range(len(horarios)):
+        if horarios[indice]["dt_horario"] > novo["dt_horario"]:
+            posicao = indice
+            break
+    horarios.insert(posicao, novo)
+
+def gerar_agenda(dados: dict) -> int:
+    """Abre a agenda de hoje e dos próximos dias úteis, sem duplicar horários.
+
+    Para cada dia de hoje até DIAS_AGENDA - 1 dias à frente (pulando sábado e
+    domingo), cria os horários de HORAS_ATENDIMENTO que ainda não existem no JSON.
+    Com PREENCHER_EXEMPLO ligado, cerca de 3 em cada 4 horários novos já nascem
+    ocupados por um paciente fictício (como numa agenda real de UBS); os demais
+    ficam LIVRES. Devolve quantos horários foram criados.
+    """
+    existentes = set()
+    for horario in dados["horarios"]:
+        existentes.add(horario["dt_horario"])
+    hoje = agora(dados).date()
+    criados = 0
+    for i in range(DIAS_AGENDA):
+        dia = hoje + timedelta(days=i)
+        if dia.weekday() >= 5:  # 5 = sábado, 6 = domingo
+            continue
+        for posicao in range(len(HORAS_ATENDIMENTO)):
+            texto = dia.strftime("%Y-%m-%d") + " " + HORAS_ATENDIMENTO[posicao]
+            if texto in existentes:
+                continue
+            novo = {
+                "id_horario": proximo_id(dados["horarios"], "id_horario"),
+                "dt_horario": texto,
+                "ds_status": "LIVRE",
+            }
+            inserir_em_ordem(dados["horarios"], novo)
+            existentes.add(texto)
+            criados += 1
+            # 1 em cada 4 fica livre; a soma com o dia muda quais ficam livres a cada dia
+            if PREENCHER_EXEMPLO and (posicao + dia.day) % 4 != 0:
+                ocupar_com_exemplo(dados, novo)
+    return criados
+
+
+def ocupar_com_exemplo(dados: dict, horario: dict) -> None:
+    """Agenda um paciente fictício no horário, usando as mesmas regras do agendamento.
+
+    O número da nova consulta (n) escolhe o nome e o sobrenome, então cada
+    consulta gerada tem um paciente diferente (até 80 combinações).
+    Faltas, primeira vez e contato também variam com n, para ter risco ALTO,
+    risco BAIXO e paciente sem contato na demonstração.
+    """
+    n = proximo_id(dados["consultas"], "id_consulta")
+    nome = NOMES_EXEMPLO[(n * 7) % len(NOMES_EXEMPLO)]
+    sobrenome = SOBRENOMES_EXEMPLO[(n * 3 + n // len(NOMES_EXEMPLO)) % len(SOBRENOMES_EXEMPLO)]
+    cns = str(700000000001000 + n)          # 15 dígitos, um por consulta
+    faltas = (0, 0, 1, 0, 2, 0, 3, 1)[n % 8]
+    primeira_vez = n % 5 == 0
+    contato = n % 7 != 0
+    agendar_consulta(dados, horario["id_horario"], nome + " " + sobrenome, cns,
+                     faltas, primeira_vez, contato)
+
 def horarios_disponiveis(dados: dict) -> list:
     """Horários em que dá para agendar: LIVRE e LIBERADO (vaga devolvida)."""
     disponiveis = []
     for horario in dados["horarios"]:
-        if horario["ds_status"] == "LIVRE" or horario["ds_status"] == "LIBERADO":
+        livre = horario["ds_status"] == "LIVRE" or horario["ds_status"] == "LIBERADO"
+        if livre and horas_ate_consulta(dados, horario) > 0:
             disponiveis.append(horario)
     return disponiveis
 
@@ -237,15 +344,18 @@ def liberar_consulta(dados: dict, consulta: dict) -> None:
 
 # ---------- comparecimento ----------
 def consultas_do_comparecimento(dados: dict) -> list:
-    """Consultas que aguardam registro de presença ou falta.
+    """Consultas de hoje que aguardam registro de presença ou falta.
 
     Só entram as que já chegaram no horário (ou passaram): não dá para registrar
     presença ou falta de uma consulta que ainda não aconteceu.
     """
+    hoje = agora(dados).date()
     lista = []
     for consulta in dados["consultas"]:
         aguardando = consulta["ds_status"] == "AGENDADA" or consulta["ds_status"] == "CONFIRMADA"
-        if aguardando and consulta_ja_passou(dados, consulta):
+        horario = buscar_horario(dados, consulta["id_horario"])
+        do_dia = momento_do_horario(horario).date() == hoje
+        if aguardando and do_dia and consulta_ja_passou(dados, consulta):
             lista.append(consulta)
     return lista
 
@@ -255,9 +365,11 @@ def registrar_presenca(consulta: dict) -> None:
     consulta["ds_status"] = "REALIZADA"
 
 
-def registrar_falta(consulta: dict) -> None:
-    """Consulta passa para FALTA."""
+def registrar_falta(dados: dict, consulta: dict) -> None:
+    """Consulta passa para FALTA e o horário volta a ficar LIBERADO para encaixe."""
     consulta["ds_status"] = "FALTA"
+    horario = buscar_horario(dados, consulta["id_horario"])
+    horario["ds_status"] = "LIBERADO"
 
 
 # ---------- lista do dia ----------
@@ -304,19 +416,42 @@ def proximo_da_lista(lista: list, ignorados: set) -> dict:
 
 
 def horarios_liberados(dados: dict) -> list:
-    """Horários com status LIBERADO (vagas que podem ser ofertadas)."""
-    liberados = []
+    """Vagas de HOJE que podem ser ofertadas para a lista do dia.
+
+    - LIVRE: horário que ninguém agendou, só se ainda não passou.
+    - LIBERADO: vaga devolvida por falta de confirmação ou porque o paciente
+      faltou. Pode ser ofertada até TOLERANCIA_ENCAIXE_MIN minutos depois do
+      horário, porque a falta só é registrada depois que o horário começa.
+    """
+    hoje = agora(dados).date()
+    tolerancia_h = TOLERANCIA_ENCAIXE_MIN / 60
+    vagas = []
     for horario in dados["horarios"]:
-        if horario["ds_status"] == "LIBERADO":
-            liberados.append(horario)
-    return liberados
+        if momento_do_horario(horario).date() != hoje:
+            continue
+        horas = horas_ate_consulta(dados, horario)
+        if horario["ds_status"] == "LIVRE" and horas > 0:
+            vagas.append(horario)
+        elif horario["ds_status"] == "LIBERADO" and horas > -tolerancia_h:
+            vagas.append(horario)
+    return vagas
 
+def encaixar(dados: dict, pessoa: dict, horario: dict) -> None:
+    """Cidadão aceitou a vaga: fica ENCAIXADO e ganha uma consulta no horário.
 
-def encaixar(pessoa: dict, horario: dict) -> None:
-    """Cidadão aceitou a vaga: ele fica ENCAIXADO e o horário REAPROVEITADO."""
+    A consulta é criada com agendar_consulta (como é para hoje, já nasce
+    CONFIRMADA), então o nome aparece na agenda e ela entra no comparecimento.
+    Vaga LIBERADA (devolvida ou falta) vira REAPROVEITADO, que conta no indicador
+    de reaproveitamento. Vaga LIVRE fica AGENDADO, porque só estava sobrando.
+    """
+    estava_liberado = horario["ds_status"] == "LIBERADO"
+    consulta = agendar_consulta(dados, horario["id_horario"], pessoa["nm_cidadao"],
+                                pessoa["nr_cns"], 0, False, True)
+    consulta["fl_encaixe"] = True
     pessoa["ds_status"] = "ENCAIXADO"
     pessoa["fl_prioridade_amanha"] = False
-    horario["ds_status"] = "REAPROVEITADO"
+    if estava_liberado:
+        horario["ds_status"] = "REAPROVEITADO"
 
 
 def fechar_dia(dados: dict) -> list:
@@ -332,6 +467,7 @@ def fechar_dia(dados: dict) -> list:
             pessoa["fl_prioridade_amanha"] = True
             copia = dict(pessoa)
             copia["ds_status"] = "AGUARDANDO"
+            copia["hr_chegada"] = "dia ant."   # a hora de chegada era do dia anterior
             para_amanha.append(copia)
     dados["config"]["dia_fechado"] = True
     return para_amanha

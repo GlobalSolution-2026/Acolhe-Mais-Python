@@ -1,4 +1,20 @@
-"""Submenus da recepção. Cada tela limpa o terminal e pausa para leitura."""
+"""Submenus da recepção (telas do terminal).
+
+Cada opção do menu principal tem um submenu aqui:
+- Agenda do dia: ver horários e agendar consulta em horário livre ou liberado.
+- Confirmações: ver pendentes (risco ALTO primeiro), registrar confirmação,
+  liberar consultas não confirmadas no prazo e ajustar o relógio simulado.
+- Comparecimento: registrar presença ou falta das consultas que já passaram.
+- Lista do dia: incluir cidadão (VERDE ou AZUL), ver a lista na ordem de
+  prioridade e ofertar vaga liberada ao primeiro da lista.
+- Relatórios: absenteísmo, reaproveitamento, não encaixados e encerrar o dia.
+
+Este arquivo só cuida da conversa com o usuário: lê as opções (validacoes.py),
+mostra as telas (interface.py), chama as regras (regras.py e relatorios.py)
+e salva os dados (dados.py) depois de cada alteração.
+Cada tela limpa o terminal e pausa no final para o usuário conseguir ler.
+"""
+
 import dados as bd
 import interface as ifc
 import regras
@@ -90,13 +106,19 @@ def ver_horarios(dados: dict) -> None:
     ifc.limpar_tela()
     ifc.titulo("HORÁRIOS")
     linhas = []
+    hoje = regras.agora(dados).date()
     for horario in dados["horarios"]:
+        if regras.momento_do_horario(horario).date() != hoje:
+            continue
         data, hora = data_e_hora(horario)
         consulta = regras.consulta_ativa_do_horario(dados, horario["id_horario"])
         paciente = ""
         if consulta is not None:
             paciente = consulta["nm_paciente"]
         linhas.append((horario["id_horario"], data, hora, horario["ds_status"], paciente))
+    if len(linhas) == 0:
+        print("Não há horários na agenda de hoje.")
+        return
     ifc.mostrar_tabela(COLUNAS_HORARIO, linhas)
 
 
@@ -117,6 +139,10 @@ def agendar(dados: dict) -> None:
     horario = regras.buscar_horario(dados, id_escolhido)
     nome = val.ler_texto("Nome do paciente")
     cns = val.ler_cns()
+    if regras.cartao_de_outra_pessoa(dados, cns, nome):
+        print(f"\nEste cartão SUS já está cadastrado para "
+              f"{regras.nome_do_cartao(dados, cns)}. Confira os dados.")
+        return
     dia = regras.momento_do_horario(horario).date()
     existente = regras.consulta_ativa_no_dia(dados, cns, dia)
     if existente is not None:
@@ -221,6 +247,7 @@ def ajustar_relogio(dados: dict) -> None:
     print(f"Data/hora do sistema agora: {atual}")
     texto = val.ler_data_hora("Nova data/hora")
     regras.definir_relogio(dados, texto)
+    regras.gerar_agenda(dados)
     bd.salvar_json(dados)
     novo = regras.agora(dados).strftime("%d/%m/%Y %H:%M")
     print(f"Data/hora do sistema: {novo}")
@@ -263,7 +290,7 @@ def registrar_comparecimento(dados: dict, opcao: str) -> None:
         if not val.ler_sn(f"Confirmar FALTA de {consulta['nm_paciente']}?"):
             print("Operação cancelada.")
             return
-        regras.registrar_falta(consulta)
+        regras.registrar_falta(dados, consulta)
         print("Falta registrada.")
     bd.salvar_json(dados)
 
@@ -295,6 +322,10 @@ def incluir_cidadao(dados: dict) -> None:
     """Inclui um cidadão na lista do dia, barrando cartão SUS repetido (set)."""
     nome = val.ler_texto("Nome do cidadão")
     cns = val.ler_cns()
+    if regras.cartao_de_outra_pessoa(dados, cns, nome):
+        print(f"Este cartão SUS já está cadastrado para "
+              f"{regras.nome_do_cartao(dados, cns)}. Confira os dados.")
+        return
     if cns in regras.cartoes_cadastrados(dados["lista_dia"]):
         print("Este cartão SUS já está na lista do dia.")
         return
@@ -362,7 +393,7 @@ def ofertar_vaga(dados: dict) -> None:
         print("1. Aceitou   2. Recusou   3. Não respondeu")
         resposta = val.ler_opcao(("1", "2", "3"))
         if resposta == "1":
-            regras.encaixar(pessoa, horario)
+            regras.encaixar(dados, pessoa, horario)
             bd.salvar_json(dados)
             print(f"{pessoa['nm_cidadao']} encaixado(a) em {data} às {hora}.")
             break
@@ -455,15 +486,25 @@ def mostrar_reaproveitamento(dados: dict) -> None:
 
 
 def mostrar_nao_encaixados(dados: dict) -> None:
-    """Lista as pessoas que não conseguiram vaga no dia."""
-    nao = relatorios.listar_nao_encaixados(dados["lista_dia"])
-    if len(nao) == 0:
-        print("Nenhuma pessoa não encaixada.")
+    """Lista quem não conseguiu vaga no dia.
+
+    Com o dia encerrado, mostra os NAO_ENCAIXADO. Com o dia ainda aberto,
+    mostra quem continua AGUARDANDO (se o dia fosse encerrado agora,
+    essas pessoas ficariam sem vaga).
+    """
+    if dados["config"].get("dia_fechado", False):
+        pessoas = relatorios.listar_nao_encaixados(dados["lista_dia"])
+    else:
+        pessoas = relatorios.listar_aguardando(dados["lista_dia"])
+        print("O dia ainda não foi encerrado. Quem continua aguardando vaga:\n")
+    if len(pessoas) == 0:
+        print("Nenhuma pessoa sem vaga.")
         return
     linhas = []
     posicao = 1
-    for pessoa in nao:
+    for pessoa in pessoas:
+        prioridade = "Sim" if pessoa["fl_prioridade_amanha"] else ""
         linhas.append((posicao, pessoa["nm_cidadao"], pessoa["ds_cor"],
-                       pessoa["hr_chegada"], pessoa["ds_status"], "Sim"))
+                       pessoa["hr_chegada"], pessoa["ds_status"], prioridade))
         posicao += 1
     ifc.mostrar_tabela(COLUNAS_PESSOA, linhas)

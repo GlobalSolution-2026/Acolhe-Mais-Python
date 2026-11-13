@@ -11,8 +11,10 @@ Ao encerrar a agenda do dia também é gerado um relatório em JSON
 import json
 import os
 
-ARQUIVO = "dados.json"
-ARQUIVO_PROXIMO_DIA = "lista_proximo_dia.json"
+# Pasta onde estão os .py: os JSON ficam sempre aqui, de onde quer que o programa rode
+PASTA = os.path.dirname(os.path.abspath(__file__))
+ARQUIVO = os.path.join(PASTA, "dados.json")
+ARQUIVO_PROXIMO_DIA = os.path.join(PASTA, "lista_proximo_dia.json")
 
 # Tuplas: valores fixos (nunca mudam durante a execução)
 CORES = ("VERDE", "AZUL")
@@ -27,6 +29,24 @@ FORMATO_DATA_HORA = "%Y-%m-%d %H:%M"
 PRAZO_CONFIRMACAO = {"ALTO": 72, "BAIXO": 48}
 # Regra de negócio: consulta marcada com menos de 24h dispensa confirmação
 LIMITE_DISPENSA_H = 24
+# Regra de negócio: vaga LIBERADA (ex.: paciente faltou) ainda pode ser ofertada
+# até esse tempo depois do horário, porque o profissional continua livre
+TOLERANCIA_ENCAIXE_MIN = 30
+
+# Agenda automática: horários de atendimento de cada dia útil (seg a sex)
+HORAS_ATENDIMENTO = ("08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00",
+                     "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00")
+# Quantos dias para frente a agenda é aberta (contando hoje)
+DIAS_AGENDA = 7
+
+# Pacientes FICTÍCIOS usados só para a agenda nova já nascer ocupada, como uma
+# agenda real de UBS. O nome é montado combinando um nome com um sobrenome
+# (10 x 8 = 80 pacientes diferentes). Para desligar, use PREENCHER_EXEMPLO = False.
+PREENCHER_EXEMPLO = True
+NOMES_EXEMPLO = ("Ana", "Bruno", "Cláudia", "Daniel", "Elaine",
+                 "Fábio", "Gabriela", "Henrique", "Isabela", "Jorge")
+SOBRENOMES_EXEMPLO = ("Lima", "Alves", "Reis", "Costa", "Prado",
+                      "Moraes", "Dias", "Lopes")
 
 
 def dados_vazios() -> dict:
@@ -84,5 +104,5 @@ def salvar_relatorio_dia(relatorio: dict) -> str:
     Devolve o nome do arquivo criado (usa a data que está dentro do relatório).
     """
     nome_arquivo = f"relatorio_{relatorio['data']}.json"
-    gravar_arquivo(nome_arquivo, relatorio)
+    gravar_arquivo(os.path.join(PASTA, nome_arquivo), relatorio)
     return nome_arquivo

@@ -1,4 +1,15 @@
-"""Recepção UBS - menu principal. Requer Python 3.10+ (match-case)."""
+"""Recepção UBS (Acolhe+) - menu principal do sistema.
+
+Ao abrir, o programa:
+- carrega o dados.json e a lista_proximo_dia.json;
+- prepara o dia: se o dia anterior foi encerrado, a lista do dia começa vazia
+  e quem não foi encaixado ontem entra com prioridade;
+- salva o estado e mostra o menu principal até o usuário escolher Sair.
+
+Opções do menu: 1. Agenda do dia, 2. Confirmações, 3. Comparecimento,
+4. Lista do dia e 5. Relatórios. Cada opção chama um submenu do menus.py.
+"""
+
 import dados as bd
 import interface as ifc
 import menus
@@ -11,6 +22,7 @@ def main() -> None:
     dados = bd.carregar_json()
     pessoas_proximo_dia = bd.carregar_proximo_dia()
     entraram = regras.iniciar_novo_dia(dados, pessoas_proximo_dia)
+    regras.gerar_agenda(dados)
     if len(pessoas_proximo_dia) > 0:
         bd.salvar_proximo_dia([])
     bd.salvar_json(dados)
