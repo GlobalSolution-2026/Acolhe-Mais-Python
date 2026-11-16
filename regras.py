@@ -3,8 +3,9 @@
 Principais regras:
 - Risco de falta: 1 ponto por falta anterior + 1 se for a primeira consulta
   na UBS. Com 2 pontos ou mais o risco é ALTO; senão, BAIXO.
-- Confirmação: risco ALTO precisa confirmar 72h antes e risco BAIXO, 48h antes.
-  Consulta marcada com menos de 24h de antecedência dispensa confirmação.
+- Confirmação: pedida 3 dias úteis antes (risco ALTO) ou 2 dias úteis antes
+  (risco BAIXO); o prazo termina 1 dia útil antes da consulta.
+  Consulta marcada para o mesmo dia dispensa confirmação.
 - Liberação: consulta não confirmada no prazo tem a vaga liberada, mas
   paciente sem contato fica protegido (não perde a vaga).
 - Lista do dia: ordem de prioridade = quem veio do dia anterior primeiro,
@@ -18,7 +19,7 @@ Aqui não tem input nem print: só regras que alteram e consultam os dados.
 
 from datetime import datetime, timedelta
 
-from dados import (PRAZO_CONFIRMACAO, LIMITE_DISPENSA_H, FORMATO_DATA_HORA, CORES,
+from dados import (PEDIDO_CONFIRMACAO_DIAS, PRAZO_FINAL_DIAS, FORMATO_DATA_HORA, CORES,
                    HORAS_ATENDIMENTO, DIAS_AGENDA, TOLERANCIA_ENCAIXE_MIN,
                    PREENCHER_EXEMPLO, NOMES_EXEMPLO, SOBRENOMES_EXEMPLO)
 
@@ -55,6 +56,21 @@ def horas_ate_consulta(dados: dict, horario: dict) -> float:
     diferenca = momento_do_horario(horario) - agora(dados)
     return diferenca.total_seconds() / 3600
 
+def dias_uteis_ate(dados: dict, horario: dict) -> int:
+    """Quantos dias úteis (seg a sex) faltam de hoje até o dia da consulta.
+
+    Conta o dia da consulta e não conta hoje. Ex.: hoje segunda e consulta
+    na quarta = 2 dias úteis. Consulta marcada para hoje = 0.
+    """
+    hoje = agora(dados).date()
+    dia_consulta = momento_do_horario(horario).date()
+    dias = 0
+    dia = hoje + timedelta(days=1)
+    while dia <= dia_consulta:
+        if dia.weekday() < 5:  # 0 a 4 = segunda a sexta
+            dias += 1
+        dia += timedelta(days=1)
+    return dias
 
 # ---------- buscas ----------
 def buscar_horario(dados: dict, id_horario: int) -> dict:
@@ -242,8 +258,7 @@ def agendar_consulta(dados: dict, id_horario: int, nome: str, cns: str,
     (já nasce CONFIRMADA). Caso contrário nasce AGENDADA, aguardando confirmação.
     """
     horario = buscar_horario(dados, id_horario)
-    horas = horas_ate_consulta(dados, horario)
-    if horas < LIMITE_DISPENSA_H:
+    if dias_uteis_ate(dados, horario) < PRAZO_FINAL_DIAS:
         status = "CONFIRMADA"
         dispensada = True
     else:
@@ -275,6 +290,13 @@ def exige_confirmacao(consulta: dict) -> bool:
         return False
     return True
 
+def pedido_aberto(dados: dict, consulta: dict) -> bool:
+    """True se já chegou o dia de pedir a confirmação.
+
+    Risco ALTO: a partir de 3 dias úteis antes; risco BAIXO: a partir de 2.
+    """
+    horario = buscar_horario(dados, consulta["id_horario"])
+    return dias_uteis_ate(dados, horario) <= PEDIDO_CONFIRMACAO_DIAS[consulta["ds_risco"]]
 
 def consultas_pendentes(dados: dict) -> list:
     """Consultas pendentes de confirmação, risco ALTO primeiro e depois BAIXO.
@@ -285,10 +307,12 @@ def consultas_pendentes(dados: dict) -> list:
     pendentes = []
     for consulta in dados["consultas"]:
         if (exige_confirmacao(consulta) and consulta["ds_risco"] == "ALTO"
+                and pedido_aberto(dados, consulta) and not prazo_vencido(dados, consulta)
                 and not consulta_ja_passou(dados, consulta)):
             pendentes.append(consulta)
     for consulta in dados["consultas"]:
         if (exige_confirmacao(consulta) and consulta["ds_risco"] == "BAIXO"
+                and pedido_aberto(dados, consulta) and not prazo_vencido(dados, consulta)
                 and not consulta_ja_passou(dados, consulta)):
             pendentes.append(consulta)
     return pendentes
@@ -309,14 +333,14 @@ def confirmar_consulta(dados: dict, id_consulta: int) -> bool:
 
 
 def prazo_vencido(dados: dict, consulta: dict) -> bool:
-    """True se a consulta já entrou na janela de confirmação e ainda não confirmou.
+    """True se o prazo de confirmação acabou e o horário ainda não passou.
 
-    Risco ALTO pede confirmação 72h antes; BAIXO, 48h antes. Se faltam menos horas
-    que o prazo (e a consulta ainda não passou), o prazo venceu.
+    O prazo vai até 1 dia útil antes da consulta. Então, quando a consulta é
+    hoje (0 dias úteis) e não foi confirmada, o prazo venceu.
     """
     horario = buscar_horario(dados, consulta["id_horario"])
-    horas = horas_ate_consulta(dados, horario)
-    return 0 < horas <= PRAZO_CONFIRMACAO[consulta["ds_risco"]]
+    return (dias_uteis_ate(dados, horario) < PRAZO_FINAL_DIAS
+            and horas_ate_consulta(dados, horario) > 0)
 
 
 def consultas_para_liberar(dados: dict) -> tuple:

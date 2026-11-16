@@ -25,10 +25,11 @@ STATUS_LISTA = ("AGUARDANDO", "ENCAIXADO", "NAO_ENCAIXADO")
 # Formato de data/hora guardado no JSON (ex.: "2026-11-10 08:00")
 FORMATO_DATA_HORA = "%Y-%m-%d %H:%M"
 
-# Regra de negócio: antecedência (em horas) para pedir confirmação por risco
-PRAZO_CONFIRMACAO = {"ALTO": 72, "BAIXO": 48}
-# Regra de negócio: consulta marcada com menos de 24h dispensa confirmação
-LIMITE_DISPENSA_H = 24
+# Regra de negócio: quantos dias úteis antes da consulta a confirmação é pedida
+PEDIDO_CONFIRMACAO_DIAS = {"ALTO": 3, "BAIXO": 2}
+# Regra de negócio: o prazo para confirmar termina 1 dia útil antes da consulta.
+# Consulta marcada a menos de 1 dia útil da data (ou seja, para hoje) dispensa confirmação
+PRAZO_FINAL_DIAS = 1
 # Regra de negócio: vaga LIBERADA (ex.: paciente faltou) ainda pode ser ofertada
 # até esse tempo depois do horário, porque o profissional continua livre
 TOLERANCIA_ENCAIXE_MIN = 30

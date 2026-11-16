@@ -161,7 +161,7 @@ def agendar(dados: dict) -> None:
     bd.salvar_json(dados)
     print(f"\nConsulta agendada. Risco de falta: {consulta['ds_risco']}.")
     if consulta["fl_confirmacao_dispensada"]:
-        print("Marcada com menos de 24h de antecedência: confirmação dispensada.")
+        print("Consulta para hoje (menos de 1 dia útil): confirmação dispensada.")
     else:
         print("Aguardando confirmação.")
 
@@ -200,7 +200,8 @@ def ver_pendentes(dados: dict) -> None:
         return
     print("Pendentes de confirmação (risco alto primeiro):\n")
     mostrar_consultas(pendentes, dados)
-    print("Prazo: risco ALTO confirma até 72h antes; risco BAIXO, até 48h antes.")
+    print("Pedido de confirmação: 3 dias úteis antes (risco ALTO) ou 2 dias úteis antes (risco BAIXO).")
+    print("Prazo para confirmar: até 1 dia útil antes da consulta.")
 
 
 def registrar_confirmacao(dados: dict) -> None:
