@@ -56,6 +56,7 @@ def horas_ate_consulta(dados: dict, horario: dict) -> float:
     diferenca = momento_do_horario(horario) - agora(dados)
     return diferenca.total_seconds() / 3600
 
+
 def dias_uteis_ate(dados: dict, horario: dict) -> int:
     """Quantos dias úteis (seg a sex) faltam de hoje até o dia da consulta.
 
@@ -71,6 +72,7 @@ def dias_uteis_ate(dados: dict, horario: dict) -> int:
             dias += 1
         dia += timedelta(days=1)
     return dias
+
 
 # ---------- buscas ----------
 def buscar_horario(dados: dict, id_horario: int) -> dict:
@@ -254,7 +256,7 @@ def agendar_consulta(dados: dict, id_horario: int, nome: str, cns: str,
                      faltas: int, primeira_vez: bool, contato: bool) -> dict:
     """Cria a consulta no horário escolhido e devolve o dicionário criado.
 
-    Regra: consulta marcada com menos de 24h de antecedência dispensa confirmação
+    Regra: consulta marcada para o mesmo dia dispensa confirmação
     (já nasce CONFIRMADA). Caso contrário nasce AGENDADA, aguardando confirmação.
     """
     horario = buscar_horario(dados, id_horario)
@@ -290,6 +292,7 @@ def exige_confirmacao(consulta: dict) -> bool:
         return False
     return True
 
+
 def pedido_aberto(dados: dict, consulta: dict) -> bool:
     """True se já chegou o dia de pedir a confirmação.
 
@@ -297,6 +300,7 @@ def pedido_aberto(dados: dict, consulta: dict) -> bool:
     """
     horario = buscar_horario(dados, consulta["id_horario"])
     return dias_uteis_ate(dados, horario) <= PEDIDO_CONFIRMACAO_DIAS[consulta["ds_risco"]]
+
 
 def consultas_pendentes(dados: dict) -> list:
     """Consultas pendentes de confirmação, risco ALTO primeiro e depois BAIXO.
