@@ -11,7 +11,7 @@ Integrantes:
 Ana Carolina Orcelli Bautzer - RM 570281
 Cauã Mathias Bertini - RM 570451
 Eduardo Lima de Souza - RM 570412
-Nicolas Frazão Viera Molina - RM 568780
+Nicolas Frazão Vieira Molina - RM 568780
 Nicolas Rodrigues Martins - RM 573178
 
 Como executar:
