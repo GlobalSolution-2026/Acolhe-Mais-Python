@@ -54,12 +54,12 @@
     },
     {
       "id_horario": 10,
-      "dt_horario": "2026-11-14 09:00",
+      "dt_horario": "2026-11-13 09:00",
       "ds_status": "LIBERADO"
     },
     {
       "id_horario": 11,
-      "dt_horario": "2026-11-14 08:00",
+      "dt_horario": "2026-11-13 08:00",
       "ds_status": "AGENDADO"
     }
   ],
